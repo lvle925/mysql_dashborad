@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运维监控中心</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* 仅需极少量自定义 CSS */
+        body { background-color: #f4f6f9; height: 100vh; overflow: hidden; }
+        .sidebar { min-height: 100vh; background: #343a40; color: #fff; }
+        .nav-link { color: #c2c7d0; margin-bottom: 5px; cursor: pointer; }
+        .nav-link:hover { color: #fff; background-color: rgba(255,255,255,0.1); border-radius: 5px; }
+        .nav-link.active { background-color: #0d6efd; color: #fff; border-radius: 5px; }
+        .content-wrapper { height: 100vh; overflow-y: auto; padding: 20px; }
+        .card { border: none; box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2); margin-bottom: 20px; }
+        .stat-icon { font-size: 2rem; opacity: 0.8; }
+        /* 视图切换逻辑 */
+        .view-panel { display: none; }
+        .view-panel.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row flex-nowrap">
+        
+        <div class="col-auto col-md-3 col-xl-2 px-sm-2 px-0 sidebar">
+            <div class="d-flex flex-column align-items-center align-items-sm-start px-3 pt-3 text-white min-vh-100">
+                <a href="#" class="d-flex align-items-center pb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+                    <i class="fa-solid fa-network-wired fa-lg me-2"></i>
+                    <span class="fs-5 d-none d-sm-inline fw-bold">OpsCenter</span>
+                </a>
+                <hr class="w-100 border-secondary">
+                
+                <ul class="nav nav-pills flex-column mb-sm-auto mb-0 align-items-center align-items-sm-start w-100" id="menu">
+                    <li class="nav-item w-100">
+                        <div class="nav-link active menu-item" data-view="overview" onclick="switchView('overview')">
+                            <i class="fa-solid fa-gauge me-2"></i> <span class="d-none d-sm-inline">系统总览</span>
+                        </div>
+                    </li>
+                    <li class="nav-item w-100">
+                        <div class="nav-link menu-item" data-view="inference" onclick="switchView('inference')">
+                            <i class="fa-solid fa-brain me-2"></i> <span class="d-none d-sm-inline">推理集群</span>
+                        </div>
+                    </li>
+                    <li class="nav-item w-100">
+                        <div class="nav-link menu-item" data-view="database" onclick="switchView('database')">
+                            <i class="fa-solid fa-database me-2"></i> <span class="d-none d-sm-inline">数据库拓扑</span>
+                        </div>
+                    </li>
+                    <li class="nav-item w-100">
+                        <div class="nav-link menu-item" data-view="servers" onclick="switchView('servers')">
+                            <i class="fa-solid fa-server me-2"></i> <span class="d-none d-sm-inline">物理节点</span>
+                        </div>
+                    </li>
+                </ul>
+                <hr>
+                <div class="pb-4 small text-muted">
+                    <i class="fa-solid fa-circle text-success small"></i> 系统正常运行
+                </div>
+            </div>
+        </div>
+
+        <div class="col py-3 content-wrapper">
+            <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                <h3 id="page-title" class="m-0 text-dark">系统总览</h3>
+                <div class="d-flex align-items-center gap-3">
+                    <span id="last-update" class="text-muted small">等待数据...</span>
+                    <button class="btn btn-outline-primary btn-sm" onclick="fetchAllData()">
+                        <i class="fa-solid fa-rotate-right"></i> 刷新
+                    </button>
+                </div>
+            </div>
+
+            <div id="view-overview" class="view-panel active">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card p-3 border-start border-4 border-primary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase fw-bold">推理节点</div>
+                                    <div class="fs-2 fw-bold text-dark" id="stat-inf">-</div>
+                                </div>
+                                <div class="stat-icon text-primary"><i class="fa-solid fa-microchip"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 border-start border-4 border-info">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase fw-bold">物理服务器</div>
+                                    <div class="fs-2 fw-bold text-dark" id="stat-srv">-</div>
+                                </div>
+                                <div class="stat-icon text-info"><i class="fa-solid fa-server"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 border-start border-4 border-warning">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase fw-bold">当前告警</div>
+                                    <div class="fs-2 fw-bold text-dark" id="stat-alert">0</div>
+                                </div>
+                                <div class="stat-icon text-warning"><i class="fa-solid fa-bell"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="mb-3">系统告警消息</h5>
+                <div id="overview-alerts">
+                    </div>
+            </div>
+
+            <div id="view-inference" class="view-panel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>SGLang 推理节点 <span class="badge bg-primary rounded-pill" id="inf-count-badge">0</span></h5>
+                </div>
+                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4" id="inf-grid">
+                    </div>
+            </div>
+
+            <div id="view-database" class="view-panel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="m-0">MySQL 主从拓扑</h5>
+                    <button class="btn btn-primary btn-sm" id="btn-check-db" onclick="checkDB()">
+                        <i class="fa-solid fa-stethoscope"></i> 检测同步状态
+                    </button>
+                </div>
+
+                <div class="card p-4 text-center mb-4 bg-light" id="db-master-container">
+                    <div class="text-muted">请点击右上角按钮进行检测</div>
+                </div>
+
+                <div class="text-center mb-4 text-muted">
+                    <i class="fa-solid fa-arrow-down mb-2"></i><br>
+                    <span class="badge bg-secondary">Binlog 同步流</span>
+                    <br><i class="fa-solid fa-arrow-down mt-2"></i>
+                </div>
+
+                <div class="row row-cols-1 row-cols-md-3 g-4" id="db-slaves-container">
+                    </div>
+            </div>
+
+            <div class="mt-4">
+                <h5 class="mb-3 border-bottom pb-2">
+                    <i class="fa-solid fa-bug text-danger me-2"></i>
+                    主从同步异常日志 (Skipped Errors)
+                </h5>
+                <div id="repl-errors-container">
+                    <div class="text-muted small">正在加载日志...</div>
+                </div>
+            </div>
+
+            <div id="view-servers" class="view-panel">
+                <h5 class="mb-3">基础设施资源 (Zabbix)</h5>
+                <div class="card">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>主机 IP</th>
+                                    <th>状态</th>
+                                    <th>CPU 使用率</th>
+                                    <th>内存使用率</th>
+                                    <th>磁盘</th>
+                                    <th>运行时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="srv-tbody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detail-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">节点详细指标</h5>
+                <button type="button" class="btn-close" onclick="closeModal()"></button>
+            </div>
+            <div class="modal-body bg-dark text-white font-monospace p-3" id="modal-json" style="max-height: 70vh; overflow: auto; white-space: pre-wrap;">
+                加载中...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
